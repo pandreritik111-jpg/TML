@@ -1,57 +1,73 @@
-name: Terraform MultiCloud CI/CD
+name: Terraform Multi-Cloud with Approval
  
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
  
 jobs:
-  plan:
+  terraform-plan:
+    name: Terraform Plan
     runs-on: ubuntu-latest
+ 
     steps:
-    - uses: actions/checkout@v4
-    - uses: hashicorp/setup-terraform@v3
+    - name: Checkout
+      uses: actions/checkout@v4
  
-    - name: AWS Plan
-      working-directory: aws
-      run: |
-        terraform init
-        terraform plan
+    # AWS Login
+    - name: AWS Login
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-north-1
  
+    # Azure Login
     - name: Azure Login
       uses: azure/login@v1
       with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
  
-    - name: Azure Plan
-      working-directory: azure
-      run: |
-        terraform init
-        terraform plan
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
  
-  apply:
-    needs: plan
+    - name: Terraform Init
+      run: terraform init
+ 
+    - name: Terraform Plan
+      run: terraform plan -out=tfplan
+ 
+ 
+  terraform-apply:
+    name: Terraform Apply (Manual Approval)
+    needs: terraform-plan
     runs-on: ubuntu-latest
-    environment: production   # 👈 manual approval gate
+ 
+    environment:
+      name: production   # 👈 this triggers manual approval
  
     steps:
-    - uses: actions/checkout@v4
-    - uses: hashicorp/setup-terraform@v3
+    - name: Checkout
+      uses: actions/checkout@v4
  
-    - name: AWS Apply
-      working-directory: aws
-      run: terraform apply -auto-approve
+    # AWS Login
+    - name: AWS Login
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: eu-north-1
  
+    # Azure Login
     - name: Azure Login
       uses: azure/login@v1
       with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
  
-    - name: Azure Apply
-      working-directory: azure
-      run: terraform apply -auto-approve
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+ 
+    - name: Terraform Init
+      run: terraform init
+ 
+    - name: Terraform Apply
+      run: terraform apply -auto-approve tfplan
